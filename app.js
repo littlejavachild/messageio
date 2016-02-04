@@ -5,12 +5,10 @@ var limiter = require("express-rate-limit");
 var logger = require("morgan");
 var MongoClient = require("mongodb").MongoClient;
 var MongoServer = require("mongodb").Server;
-var redis = require("redis");
+
 const PORT = 3000;
-const REDIS_DB = 7;
-var redisClient;
+
 var app;
-var redisIsConnected = false;
 var mongoIsConnected = false;
 //--------------------------------------------------------------------------------------------------
 // begin connection
@@ -21,28 +19,7 @@ MongoClient.connect("mongodb://localhost:27017/api_v1",function(err,db){
     exit();
   }else{
     mongoIsConnected = true;
-    console.log("MongoDB connected");
-    console.log("Connecting to Redis");
-    redisClient = redis.createClient();
-    redisClient.on("connect",function(){
-      redisIsConnected = true;
-      console.log("Redis Connected");
-      redisClient.select(REDIS_DB,function(err,res){
-        if(err){
-            console.error("Failed to select Redis DB " + REDIS_DB);
-            exit();
-        }else{
-          console.log("Connected to Redis DB " + REDIS_DB);
-          console.log("Mounting API");
-          // initialize ExpressJS and mount API
-          init(db,redisClient);
-        }
-      });
-    });
-    redisClient.on("error",function(){
-      console.error("Redis failed to connect");
-      exit();
-    })
+    init(db);
   }
 });
 //--------------------------------------------------------------------------------------------------
@@ -50,10 +27,6 @@ function cleanup(){
   if(mongoIsConnected){
     console.log("Disconnecting from MongoDB");
     mongoClient.close();
-  }
-  if(redisIsConnected){
-    console.log("Disconnecting from Redis");
-    redisClient.quit();
   }
   exit();
 }
@@ -63,7 +36,7 @@ function exit(){
   process.exit();
 }
 //--------------------------------------------------------------------------------------------------
-function init(m,r){
+function init(m){
   app = express();
   // 20 requests per second
   var ipLimiter = limiter({
@@ -93,8 +66,9 @@ function init(m,r){
     extended: false,
     type : "application/x-www-form-urlencoded"
   }));
+
   // mounting api v1
-  app.use("/api/v1",require("./api/v1/index")(m,r));
+  app.use("/api/v1",require("./api/v1/index")(m));
 
   // catch 404 and forward to error handler
   app.use(function(req, res, next) {
